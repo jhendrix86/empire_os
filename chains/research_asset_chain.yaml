@@ -1,0 +1,3 @@
+sequence:
+  - class: AssetIndexOperator
+    module: operators.all_operators

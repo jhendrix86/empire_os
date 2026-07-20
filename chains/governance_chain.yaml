@@ -1,0 +1,13 @@
+sequence:
+  - class: GovernanceOperator
+    module: operators.all_operators
+  - class: ConstraintEnforcer
+    module: operators.all_operators
+  - class: SafetyBoundaryOperator
+    module: operators.all_operators
+  - class: DriftMonitor
+    module: operators.all_operators
+  - class: OverrideArbiter
+    module: operators.all_operators
+  - class: EscalationOperator
+    module: operators.all_operators

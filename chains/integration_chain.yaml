@@ -1,0 +1,13 @@
+sequence:
+  - class: MultiEngineCoordinator
+    module: operators.all_operators
+  - class: HarmonizationOperator
+    module: operators.all_operators
+  - class: IntegrationOperator
+    module: operators.all_operators
+  - class: VersioningOperator
+    module: operators.all_operators
+  - class: LifecycleOperator
+    module: operators.all_operators
+  - class: IntegrationOrchestrator
+    module: operators.all_operators

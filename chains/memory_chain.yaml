@@ -1,0 +1,3 @@
+sequence:
+  - class: MemoryAlignmentOperator
+    module: operators.all_operators

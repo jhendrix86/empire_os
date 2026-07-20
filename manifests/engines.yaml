@@ -1,0 +1,73 @@
+engines:
+  - name: input
+    module: engines/input_engine.py
+  - name: context
+    module: engines/context_engine.py
+  - name: reasoning
+    module: engines/reasoning_engine.py
+  - name: execution
+    module: engines/execution_engine.py
+  - name: governance
+    module: engines/governance_engine.py
+  - name: memory
+    module: engines/memory_engine.py
+  - name: optimization
+    module: engines/optimization_engine.py
+  - name: integration
+    module: engines/integration_engine.py
+  - name: are
+    module: engines/are_engine.py
+  - name: cfa
+    module: engines/cfa_engine.py
+  - name: talora
+    module: engines/talora_engine.py
+  - name: audience_graph
+    module: engines/audience_graph_engine.py
+  - name: brand_geometry
+    module: engines/brand_geometry_engine.py
+  - name: brand_enforcement
+    module: engines/brand_enforcement_engine.py
+  - name: research_toolkit
+    module: engines/research_toolkit_engine.py
+  - name: knowledge_memory
+    module: engines/knowledge_memory_engine.py
+  - name: n8n_automation
+    module: engines/n8n_automation_engine.py
+  - name: module_definition
+    module: engines/module_definition_engine.py
+  - name: deployment_spec
+    module: engines/deployment_spec_engine.py
+  - name: environment_context
+    module: engines/environment_context_engine.py
+  - name: bundle_strategy
+    module: engines/bundle_strategy_engine.py
+  - name: computer_inventory
+    module: engines/computer_inventory_engine.py
+  - name: system_document
+    module: engines/system_document_engine.py
+  - name: maximum_universe
+    module: engines/maximum_universe_engine.py
+  - name: evolution
+    module: engines/evolution_engine.py
+  - name: multiverse_reconstruction
+    module: engines/multiverse_reconstruction_engine.py
+  - name: logic_motion
+    module: engines/logic_motion_engine.py
+  - name: ops_runbook
+    module: engines/ops_runbook_engine.py
+  - name: spec_compliance
+    module: engines/spec_compliance_engine.py
+  - name: security_governance
+    module: engines/security_governance_engine.py
+  - name: testing_validation
+    module: engines/testing_validation_engine.py
+  - name: are_blueprint
+    module: engines/are_blueprint_engine.py
+  - name: universe_layout
+    module: engines/universe_layout_engine.py
+  - name: prompt_workflow
+    module: engines/prompt_workflow_engine.py
+  - name: module_pack
+    module: engines/module_pack_engine.py
+  - name: research_asset
+    module: engines/research_asset_engine.py

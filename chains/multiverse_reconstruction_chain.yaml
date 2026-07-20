@@ -1,0 +1,3 @@
+sequence:
+  - class: CanonIndexOperator
+    module: operators.all_operators

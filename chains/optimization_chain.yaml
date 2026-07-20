@@ -1,0 +1,13 @@
+sequence:
+  - class: OptimizationOperator
+    module: operators.all_operators
+  - class: CompressionOperator
+    module: operators.all_operators
+  - class: ExpansionOperator
+    module: operators.all_operators
+  - class: ConsistencyOperator
+    module: operators.all_operators
+  - class: LoadBalancer
+    module: operators.all_operators
+  - class: RedundancyOperator
+    module: operators.all_operators

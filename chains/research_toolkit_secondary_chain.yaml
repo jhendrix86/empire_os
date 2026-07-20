@@ -1,0 +1,13 @@
+# Secondary Enhancement Flow -- optional modules that enrich the primary
+# research pipeline, per the same blueprint, section 4.2. Not auto-loaded by
+# the orchestrator (no engine resolves to this chain name by default) --
+# call load_chain("research_toolkit_secondary_chain") explicitly when needed.
+sequence:
+  - class: TrendAnalyzerOperator
+    module: operators.all_operators
+  - class: CrossIndustryInsightOperator
+    module: operators.all_operators
+  - class: FutureScenarioBuilderOperator
+    module: operators.all_operators
+  - class: ExpertDebateSimulatorOperator
+    module: operators.all_operators

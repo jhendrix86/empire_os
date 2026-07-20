@@ -1,0 +1,3 @@
+sequence:
+  - class: WorkflowExportOperator
+    module: operators.all_operators

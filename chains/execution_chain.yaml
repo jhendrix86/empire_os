@@ -1,0 +1,13 @@
+sequence:
+  - class: DependencyChecker
+    module: operators.all_operators
+  - class: ResourceAllocator
+    module: operators.all_operators
+  - class: StructuralFormatter
+    module: operators.all_operators
+  - class: ExecutionRouter
+    module: operators.all_operators
+  - class: ErrorRecoveryOperator
+    module: operators.all_operators
+  - class: ValidationOperator
+    module: operators.all_operators

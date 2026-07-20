@@ -1,0 +1,3 @@
+sequence:
+  - class: LogicRouterOperator
+    module: operators.all_operators

@@ -1,0 +1,13 @@
+sequence:
+  - class: InputInterpreter
+    module: operators.all_operators
+  - class: PrecisionRefiner
+    module: operators.all_operators
+  - class: ClarificationOperator
+    module: operators.all_operators
+  - class: ConstraintEnforcer
+    module: operators.all_operators
+  - class: ContextStabilizer
+    module: operators.all_operators
+  - class: ExecutionRouter
+    module: operators.all_operators

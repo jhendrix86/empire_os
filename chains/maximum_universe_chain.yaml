@@ -1,0 +1,3 @@
+sequence:
+  - class: UniverseLayerLookupOperator
+    module: operators.all_operators

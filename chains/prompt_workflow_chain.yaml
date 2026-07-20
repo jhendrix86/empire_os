@@ -1,0 +1,3 @@
+sequence:
+  - class: PipelineSequencerOperator
+    module: operators.all_operators

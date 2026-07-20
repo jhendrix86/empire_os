@@ -1,0 +1,3 @@
+sequence:
+  - class: PackAssemblerOperator
+    module: operators.all_operators

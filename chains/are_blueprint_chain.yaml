@@ -1,0 +1,3 @@
+sequence:
+  - class: BlueprintSectionOperator
+    module: operators.all_operators

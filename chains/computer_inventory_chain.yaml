@@ -1,0 +1,3 @@
+sequence:
+  - class: InventoryRecordValidatorOperator
+    module: operators.all_operators

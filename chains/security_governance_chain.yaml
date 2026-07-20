@@ -1,0 +1,3 @@
+sequence:
+  - class: AccessControlOperator
+    module: operators.all_operators

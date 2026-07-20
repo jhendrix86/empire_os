@@ -1,0 +1,3 @@
+sequence:
+  - class: KnowledgeGraphOperator
+    module: operators.all_operators

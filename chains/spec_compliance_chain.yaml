@@ -1,0 +1,3 @@
+sequence:
+  - class: RegistryComplianceOperator
+    module: operators.all_operators

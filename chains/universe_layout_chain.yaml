@@ -1,0 +1,3 @@
+sequence:
+  - class: LayoutPageOperator
+    module: operators.all_operators

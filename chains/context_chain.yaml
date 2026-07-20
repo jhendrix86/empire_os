@@ -1,0 +1,7 @@
+sequence:
+  - class: ContextStabilizer
+    module: operators.all_operators
+  - class: ModeSwitchOperator
+    module: operators.all_operators
+  - class: ContextRebuilder
+    module: operators.all_operators

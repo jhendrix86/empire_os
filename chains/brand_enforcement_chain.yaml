@@ -1,0 +1,3 @@
+sequence:
+  - class: BrandDoctrineComplianceOperator
+    module: operators.all_operators

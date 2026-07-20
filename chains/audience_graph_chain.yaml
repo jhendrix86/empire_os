@@ -1,0 +1,3 @@
+sequence:
+  - class: SegmentOverlapOperator
+    module: operators.all_operators

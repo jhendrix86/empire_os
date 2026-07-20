@@ -1,0 +1,504 @@
+operators:
+  - name: InputInterpreter
+    type: reactive
+    engine: input
+    triggers: ["new_input"]
+    module: operators/all_operators.py
+
+  - name: ContextStabilizer
+    type: reactive
+    engine: context
+    triggers: ["context_drift"]
+    module: operators/all_operators.py
+
+  - name: ClarificationOperator
+    type: reactive
+    engine: input
+    triggers: ["ambiguity"]
+    module: operators/all_operators.py
+
+  - name: ConstraintEnforcer
+    type: reactive
+    engine: governance
+    triggers: ["constraint_violation"]
+    module: operators/all_operators.py
+
+  - name: SafetyBoundaryOperator
+    type: reactive
+    engine: governance
+    triggers: ["safety_breach"]
+    module: operators/all_operators.py
+
+  - name: PrecisionRefiner
+    type: reactive
+    engine: input
+    triggers: ["imprecision"]
+    module: operators/all_operators.py
+
+  - name: StructuralFormatter
+    type: reactive
+    engine: execution
+    triggers: ["format_violation"]
+    module: operators/all_operators.py
+
+  - name: ExecutionRouter
+    type: reactive
+    engine: execution
+    triggers: ["execution_request"]
+    module: operators/all_operators.py
+
+  - name: ErrorRecoveryOperator
+    type: reactive
+    engine: execution
+    triggers: ["error_occurred"]
+    module: operators/all_operators.py
+
+  - name: MemoryAlignmentOperator
+    type: reactive
+    engine: memory
+    triggers: ["memory_mismatch"]
+    module: operators/all_operators.py
+
+  - name: PredictivePlanner
+    type: proactive
+    engine: optimization
+    triggers: ["planning_cycle"]
+    module: operators/all_operators.py
+
+  - name: OpportunityScanner
+    type: proactive
+    engine: optimization
+    triggers: ["opportunity_scan_cycle"]
+    module: operators/all_operators.py
+
+  - name: OptimizationOperator
+    type: proactive
+    engine: optimization
+    triggers: ["optimization_cycle"]
+    module: operators/all_operators.py
+
+  - name: AuditCycleOperator
+    type: proactive
+    engine: governance
+    triggers: ["audit_cycle"]
+    module: operators/all_operators.py
+
+  - name: DriftMonitor
+    type: proactive
+    engine: governance
+    triggers: ["monitoring_cycle"]
+    module: operators/all_operators.py
+
+  - name: LoadBalancer
+    type: proactive
+    engine: optimization
+    triggers: ["load_imbalance"]
+    module: operators/all_operators.py
+
+  - name: RedundancyOperator
+    type: proactive
+    engine: optimization
+    triggers: ["redundancy_check"]
+    module: operators/all_operators.py
+
+  - name: ConsistencyOperator
+    type: proactive
+    engine: governance
+    triggers: ["consistency_check"]
+    module: operators/all_operators.py
+
+  - name: CompressionOperator
+    type: proactive
+    engine: optimization
+    triggers: ["compression_cycle"]
+    module: operators/all_operators.py
+
+  - name: ExpansionOperator
+    type: proactive
+    engine: optimization
+    triggers: ["expansion_cycle"]
+    module: operators/all_operators.py
+
+  - name: DecisionTreeOperator
+    type: conditional
+    engine: reasoning
+    triggers: ["decision_point"]
+    module: operators/all_operators.py
+
+  - name: PriorityResolver
+    type: conditional
+    engine: reasoning
+    triggers: ["priority_conflict"]
+    module: operators/all_operators.py
+
+  - name: ResourceAllocator
+    type: conditional
+    engine: execution
+    triggers: ["resource_request"]
+    module: operators/all_operators.py
+
+  - name: ModeSwitchOperator
+    type: conditional
+    engine: context
+    triggers: ["mode_change"]
+    module: operators/all_operators.py
+
+  - name: ContextRebuilder
+    type: conditional
+    engine: context
+    triggers: ["context_rebuild"]
+    module: operators/all_operators.py
+
+  - name: MultiEngineCoordinator
+    type: conditional
+    engine: integration
+    triggers: ["coordination_request"]
+    module: operators/all_operators.py
+
+  - name: DependencyChecker
+    type: conditional
+    engine: execution
+    triggers: ["dependency_check"]
+    module: operators/all_operators.py
+
+  - name: ValidationOperator
+    type: conditional
+    engine: execution
+    triggers: ["validation_request"]
+    module: operators/all_operators.py
+
+  - name: BoundaryExpander
+    type: conditional
+    engine: reasoning
+    triggers: ["boundary_expansion"]
+    module: operators/all_operators.py
+
+  - name: BoundaryCompressor
+    type: conditional
+    engine: reasoning
+    triggers: ["boundary_compression"]
+    module: operators/all_operators.py
+
+  - name: MetaReasoningOperator
+    type: meta
+    engine: reasoning
+    triggers: ["meta_request"]
+    module: operators/all_operators.py
+
+  - name: CouncilSynthesizer
+    type: meta
+    engine: integration
+    triggers: ["council_request"]
+    module: operators/all_operators.py
+
+  - name: OverrideArbiter
+    type: meta
+    engine: governance
+    triggers: ["override_request"]
+    module: operators/all_operators.py
+
+  - name: EscalationOperator
+    type: meta
+    engine: governance
+    triggers: ["escalation_request"]
+    module: operators/all_operators.py
+
+  - name: HarmonizationOperator
+    type: meta
+    engine: integration
+    triggers: ["harmonization_request"]
+    module: operators/all_operators.py
+
+  - name: VersioningOperator
+    type: meta
+    engine: governance
+    triggers: ["versioning_request"]
+    module: operators/all_operators.py
+
+  - name: LifecycleOperator
+    type: meta
+    engine: governance
+    triggers: ["lifecycle_event"]
+    module: operators/all_operators.py
+
+  - name: GovernanceOperator
+    type: meta
+    engine: governance
+    triggers: ["governance_request"]
+    module: operators/all_operators.py
+
+  - name: IntegrationOperator
+    type: meta
+    engine: integration
+    triggers: ["integration_request"]
+    module: operators/all_operators.py
+
+  - name: IntegrationOrchestrator
+    type: meta
+    engine: integration
+    triggers: ["orchestration_request"]
+    module: operators/all_operators.py
+
+  - name: RecursiveMaturityOperator
+    type: proactive
+    engine: are
+    triggers: ["maturity_check"]
+    module: operators/all_operators.py
+
+  - name: LogicRouterOperator
+    type: conditional
+    engine: cfa
+    triggers: ["route_request"]
+    module: operators/all_operators.py
+
+  - name: AdaptiveReasoningRouterOperator
+    type: conditional
+    engine: talora
+    triggers: ["reasoning_request"]
+    module: operators/all_operators.py
+
+  - name: SegmentOverlapOperator
+    type: reactive
+    engine: audience_graph
+    triggers: ["segment_score"]
+    module: operators/all_operators.py
+
+  - name: ColorwaySpecOperator
+    type: reactive
+    engine: brand_geometry
+    triggers: ["generate_spec"]
+    module: operators/all_operators.py
+
+  - name: AssetClassifierOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["classify_asset"]
+    module: operators/all_operators.py
+
+  - name: WorkflowExportOperator
+    type: proactive
+    engine: n8n_automation
+    triggers: ["generate_workflow"]
+    module: operators/all_operators.py
+
+  - name: ModuleSpecValidatorOperator
+    type: conditional
+    engine: module_definition
+    triggers: ["validate_module"]
+    module: operators/all_operators.py
+
+  - name: DeploymentChecklistOperator
+    type: conditional
+    engine: deployment_spec
+    triggers: ["check_deployment"]
+    module: operators/all_operators.py
+
+  - name: BundlePricingOperator
+    type: proactive
+    engine: bundle_strategy
+    triggers: ["price_bundle"]
+    module: operators/all_operators.py
+
+  - name: InventoryRecordValidatorOperator
+    type: conditional
+    engine: computer_inventory
+    triggers: ["validate_device"]
+    module: operators/all_operators.py
+
+  - name: DocumentHeaderOperator
+    type: reactive
+    engine: system_document
+    triggers: ["generate_header"]
+    module: operators/all_operators.py
+
+  - name: UniverseLayerLookupOperator
+    type: reactive
+    engine: maximum_universe
+    triggers: ["lookup_layer"]
+    module: operators/all_operators.py
+
+  - name: MaturityDeltaOperator
+    type: meta
+    engine: evolution
+    triggers: ["record_cycle"]
+    module: operators/all_operators.py
+
+  - name: CanonIndexOperator
+    type: meta
+    engine: multiverse_reconstruction
+    triggers: ["canon_lookup"]
+    module: operators/all_operators.py
+
+  - name: LogicToMotionOperator
+    type: conditional
+    engine: logic_motion
+    triggers: ["advance_state"]
+    module: operators/all_operators.py
+
+  - name: RunbookLookupOperator
+    type: reactive
+    engine: ops_runbook
+    triggers: ["lookup_runbook"]
+    module: operators/all_operators.py
+
+  - name: RegistryComplianceOperator
+    type: meta
+    engine: spec_compliance
+    triggers: ["check_compliance"]
+    module: operators/all_operators.py
+
+  - name: BlueprintSectionOperator
+    type: reactive
+    engine: are_blueprint
+    triggers: ["list_sections"]
+    module: operators/all_operators.py
+
+  - name: LayoutPageOperator
+    type: reactive
+    engine: universe_layout
+    triggers: ["build_layout"]
+    module: operators/all_operators.py
+
+  - name: PipelineSequencerOperator
+    type: conditional
+    engine: prompt_workflow
+    triggers: ["next_stage"]
+    module: operators/all_operators.py
+
+  - name: PackAssemblerOperator
+    type: proactive
+    engine: module_pack
+    triggers: ["assemble_pack"]
+    module: operators/all_operators.py
+
+  - name: AssetIndexOperator
+    type: reactive
+    engine: research_asset
+    triggers: ["index_asset"]
+    module: operators/all_operators.py
+
+  - name: TopicExplorerOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["explore_topic"]
+    module: operators/all_operators.py
+
+  - name: ResearchQuestionBuilderOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["build_research_question"]
+    module: operators/all_operators.py
+
+  - name: LiteratureSummaryOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["summarize_literature"]
+    module: operators/all_operators.py
+
+  - name: ResearchGapFinderOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["find_research_gap"]
+    module: operators/all_operators.py
+
+  - name: InsightExtractorOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["extract_insight"]
+    module: operators/all_operators.py
+
+  - name: DataInterpretationOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["interpret_data"]
+    module: operators/all_operators.py
+
+  - name: FutureScenarioBuilderOperator
+    type: proactive
+    engine: research_toolkit
+    triggers: ["build_future_scenario"]
+    module: operators/all_operators.py
+
+  - name: SimplifyComplexResearchOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["simplify_research"]
+    module: operators/all_operators.py
+
+  - name: TheoryConnectorOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["connect_theory"]
+    module: operators/all_operators.py
+
+  - name: MethodologyRefinerOperator
+    type: conditional
+    engine: research_toolkit
+    triggers: ["refine_methodology"]
+    module: operators/all_operators.py
+
+  - name: HypothesisGeneratorOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["generate_hypothesis"]
+    module: operators/all_operators.py
+
+  - name: ExpertDebateSimulatorOperator
+    type: proactive
+    engine: research_toolkit
+    triggers: ["simulate_expert_debate"]
+    module: operators/all_operators.py
+
+  - name: CrossIndustryInsightOperator
+    type: proactive
+    engine: research_toolkit
+    triggers: ["cross_industry_insight"]
+    module: operators/all_operators.py
+
+  - name: TrendAnalyzerOperator
+    type: proactive
+    engine: research_toolkit
+    triggers: ["analyze_trend"]
+    module: operators/all_operators.py
+
+  - name: KnowledgeMapOperator
+    type: reactive
+    engine: research_toolkit
+    triggers: ["build_knowledge_map"]
+    module: operators/all_operators.py
+
+  - name: ResearchSummaryEngineOperator
+    type: meta
+    engine: research_toolkit
+    triggers: ["summarize_research"]
+    module: operators/all_operators.py
+
+  - name: BrandDoctrineComplianceOperator
+    type: conditional
+    engine: brand_enforcement
+    triggers: ["check_brand_compliance"]
+    module: operators/all_operators.py
+
+  - name: AccessControlOperator
+    type: conditional
+    engine: security_governance
+    triggers: ["check_access"]
+    module: operators/all_operators.py
+
+  - name: TestCoverageOperator
+    type: meta
+    engine: testing_validation
+    triggers: ["check_test_coverage"]
+    module: operators/all_operators.py
+
+  - name: EnvironmentProfileOperator
+    type: conditional
+    engine: environment_context
+    triggers: ["resolve_environment"]
+    module: operators/all_operators.py
+
+  - name: KnowledgeGraphOperator
+    type: reactive
+    engine: knowledge_memory
+    triggers: ["build_knowledge_graph"]
+    module: operators/all_operators.py

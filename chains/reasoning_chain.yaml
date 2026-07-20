@@ -1,0 +1,13 @@
+sequence:
+  - class: DecisionTreeOperator
+    module: operators.all_operators
+  - class: BoundaryCompressor
+    module: operators.all_operators
+  - class: BoundaryExpander
+    module: operators.all_operators
+  - class: PriorityResolver
+    module: operators.all_operators
+  - class: MetaReasoningOperator
+    module: operators.all_operators
+  - class: ValidationOperator
+    module: operators.all_operators

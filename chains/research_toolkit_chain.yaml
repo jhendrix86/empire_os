@@ -1,0 +1,19 @@
+# Primary Research Flow -- the standard end-to-end research pipeline,
+# per OneDrive/AI Research Toolkit Asset Blueprint (Extremely Detailed).docx section 4.1
+sequence:
+  - class: TopicExplorerOperator
+    module: operators.all_operators
+  - class: ResearchQuestionBuilderOperator
+    module: operators.all_operators
+  - class: LiteratureSummaryOperator
+    module: operators.all_operators
+  - class: ResearchGapFinderOperator
+    module: operators.all_operators
+  - class: HypothesisGeneratorOperator
+    module: operators.all_operators
+  - class: MethodologyRefinerOperator
+    module: operators.all_operators
+  - class: InsightExtractorOperator
+    module: operators.all_operators
+  - class: ResearchSummaryEngineOperator
+    module: operators.all_operators

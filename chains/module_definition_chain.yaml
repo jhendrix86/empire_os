@@ -1,0 +1,3 @@
+sequence:
+  - class: ModuleSpecValidatorOperator
+    module: operators.all_operators

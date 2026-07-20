@@ -1,0 +1,3 @@
+sequence:
+  - class: BundlePricingOperator
+    module: operators.all_operators
