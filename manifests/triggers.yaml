@@ -83,3 +83,8 @@ triggers:
   check_test_coverage: TestCoverageOperator
   resolve_environment: EnvironmentProfileOperator
   build_knowledge_graph: KnowledgeGraphOperator
+  run_research_stage: ResearchDepartmentOperator
+  run_design_stage: ProductDesignOperator
+  run_completion_stage: ProductCompletionOperator
+  run_audit_stage: PolishAuditOperator
+  run_shipping_stage: ShippingPackagerOperator

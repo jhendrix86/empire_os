@@ -1,0 +1,16 @@
+# Autonomous Product Pipeline -- Research -> Design -> Completion -> Audit -> Shipping.
+# EnvironmentProfileOperator runs first so every downstream stage can see
+# environment_profile.external_calls_allowed and decide real LLM call vs. stub.
+sequence:
+  - class: EnvironmentProfileOperator
+    module: operators.all_operators
+  - class: ResearchDepartmentOperator
+    module: operators.all_operators
+  - class: ProductDesignOperator
+    module: operators.all_operators
+  - class: ProductCompletionOperator
+    module: operators.all_operators
+  - class: PolishAuditOperator
+    module: operators.all_operators
+  - class: ShippingPackagerOperator
+    module: operators.all_operators

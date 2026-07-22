@@ -33,12 +33,13 @@ ALL_ENGINE_NAMES = [
     "logic_motion",
     "ops_runbook", "spec_compliance", "security_governance", "testing_validation",
     "are_blueprint", "universe_layout", "prompt_workflow", "module_pack", "research_asset",
+    "product_pipeline",
 ]
 
 
-def test_engine_registry_has_all_36_engines():
+def test_engine_registry_has_all_37_engines():
     assert set(ENGINE_REGISTRY.keys()) == set(ALL_ENGINE_NAMES)
-    assert len(ENGINE_REGISTRY) == 36
+    assert len(ENGINE_REGISTRY) == 37
 
 
 @pytest.mark.parametrize("key", ALL_ENGINE_NAMES)
@@ -477,3 +478,85 @@ def test_knowledge_graph_operator_builds_subject_adjacency():
         "triples": [("empire_os", "contains", "engines"), ("empire_os", "contains", "operators")]
     })
     assert state["knowledge_graph"]["empire_os"] == [("contains", "engines"), ("contains", "operators")]
+
+
+# ---- Product Pipeline: Research -> Design -> Completion -> Audit -> Shipping ----
+# environment_profile is absent/local in all these tests, so every stage takes
+# the stub branch -- no network access, no OPENAI_API_KEY required.
+
+def test_research_department_operator_stub_in_local_tier():
+    state = ops.ResearchDepartmentOperator().execute({"brand": "Acme", "niche": "Home Office", "topic": "Keyboard Stand"})
+    dossier = state["research_dossier"]
+    assert dossier["stub"] is True
+    assert set(dossier.keys()) == {"stub", "target_audience", "core_problem", "market_flaws", "data_points"}
+
+
+def test_product_design_operator_stub_consumes_dossier():
+    state = ops.ProductDesignOperator().execute({"research_dossier": {"core_problem": "wrist strain"}})
+    blueprint = state["product_blueprint"]
+    assert blueprint["stub"] is True
+    assert "wrist strain" in blueprint["specifications"][0]
+
+
+def test_product_completion_operator_stub_covers_all_platforms():
+    state = ops.ProductCompletionOperator().execute({"product_blueprint": {}})
+    assets = state["product_assets"]
+    assert set(assets.keys()) == {"stub", "web", "mobile", "api", "content"}
+
+
+def test_polish_audit_operator_flags_real_brand_violations():
+    state = ops.PolishAuditOperator().execute({
+        "product_assets": {"content": "Build your empire and conquer the market."}
+    })
+    audit = state["audit_report"]
+    assert audit["brand_compliant"] is False
+    assert "empire_metaphors" in audit["brand_violations"]
+    assert audit["issues"] == ["Brand doctrine violations detected"]
+
+
+def test_polish_audit_operator_passes_clean_copy():
+    state = ops.PolishAuditOperator().execute({"product_assets": {"content": "A clear, plain product description."}})
+    audit = state["audit_report"]
+    assert audit["brand_compliant"] is True
+    assert audit["issues"] == []
+
+
+def test_shipping_packager_operator_builds_all_five_files_without_disk_write():
+    state = ops.ShippingPackagerOperator().execute({
+        "brand": "Acme", "topic": "Keyboard Stand",
+        "research_dossier": {}, "product_blueprint": {}, "product_assets": {},
+        "audit_report": {"corrected_payload": {}},
+    })
+    files = state["shipping_package"]["files"]
+    assert set(files.keys()) == {
+        "Acme - Research - Keyboard Stand - v1.txt",
+        "Acme - Blueprint - Keyboard Stand - v1.txt",
+        "Acme - Product - Keyboard Stand - v1.txt",
+        "Acme - AuditReport - Keyboard Stand - v1.txt",
+        "Acme - Shipping - Keyboard Stand - v1.txt",
+    }
+    assert state["shipping_output_dir"] is None  # local tier: no disk side effects
+
+
+def test_product_pipeline_local_tier_runs_end_to_end():
+    # The real 6-step chain (env resolve + 5 stages), run start to finish in
+    # local tier -- every stage takes its stub branch, so this needs no
+    # network access and no OPENAI_API_KEY.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from orchestrator.chain_loader import load_chain
+
+    chain = load_chain("product_pipeline_chain")
+    assert len(chain) == 6
+
+    engine = ENGINE_REGISTRY["product_pipeline"]()
+    state = {"brand": "Acme", "niche": "Home Office", "topic": "Keyboard Stand"}
+    for operator in chain:
+        state = engine.run_operator(operator, state)
+
+    assert state["environment_profile"]["external_calls_allowed"] is False
+    assert state["research_dossier"]["stub"] is True
+    assert state["product_blueprint"]["stub"] is True
+    assert state["product_assets"]["stub"] is True
+    assert "audit_report" in state
+    assert len(state["shipping_package"]["files"]) == 5
+    assert state["shipping_output_dir"] is None

@@ -502,3 +502,33 @@ operators:
     engine: knowledge_memory
     triggers: ["build_knowledge_graph"]
     module: operators/all_operators.py
+
+  - name: ResearchDepartmentOperator
+    type: reactive
+    engine: product_pipeline
+    triggers: ["run_research_stage"]
+    module: operators/all_operators.py
+
+  - name: ProductDesignOperator
+    type: reactive
+    engine: product_pipeline
+    triggers: ["run_design_stage"]
+    module: operators/all_operators.py
+
+  - name: ProductCompletionOperator
+    type: reactive
+    engine: product_pipeline
+    triggers: ["run_completion_stage"]
+    module: operators/all_operators.py
+
+  - name: PolishAuditOperator
+    type: conditional
+    engine: product_pipeline
+    triggers: ["run_audit_stage"]
+    module: operators/all_operators.py
+
+  - name: ShippingPackagerOperator
+    type: meta
+    engine: product_pipeline
+    triggers: ["run_shipping_stage"]
+    module: operators/all_operators.py

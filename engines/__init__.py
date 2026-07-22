@@ -55,6 +55,9 @@ from .prompt_workflow_engine import PromptWorkflowEngine
 from .module_pack_engine import ModulePackEngine
 from .research_asset_engine import ResearchAssetEngine
 
+# Class 11 -- Product Pipeline Engine
+from .product_pipeline_engine import ProductPipelineEngine
+
 ENGINE_REGISTRY = {
     "input": InputEngine,
     "context": ContextEngine,
@@ -92,4 +95,5 @@ ENGINE_REGISTRY = {
     "prompt_workflow": PromptWorkflowEngine,
     "module_pack": ModulePackEngine,
     "research_asset": ResearchAssetEngine,
+    "product_pipeline": ProductPipelineEngine,
 }

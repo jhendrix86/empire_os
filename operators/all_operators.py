@@ -1,5 +1,9 @@
+import json
+import re
+from pathlib import Path
 from typing import Any, Dict
 from .operator_base import BaseOperator
+from .llm_client import call_llm
 
 
 # ========= Reactive Operators =========
@@ -1270,4 +1274,207 @@ class KnowledgeGraphOperator(BaseOperator):
         for subject, relation, obj in triples:
             graph.setdefault(subject, []).append((relation, obj))
         state["knowledge_graph"] = graph
+        return state
+
+
+# ========= Product Pipeline: Research -> Design -> Completion -> Audit -> Shipping =========
+# Five-stage autonomous product pipeline, one LLM-backed operator per stage.
+# Each operator only calls out to a real LLM when
+# state["environment_profile"]["external_calls_allowed"] is True (set by
+# EnvironmentProfileOperator, per the Tier 1/2/3 guardrails in
+# EMPIRE_PROJECT_SPEC.md sec.9); otherwise it returns a deterministic stub of
+# the same shape so this chain -- like every other one -- stays testable
+# offline with zero external dependencies.
+
+def _external_calls_allowed(state: Dict[str, Any]) -> bool:
+    return bool(state.get("environment_profile", {}).get("external_calls_allowed", False))
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", (value or "").strip()) or "untitled"
+
+
+PIPELINE_OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output" / "product_pipeline"
+
+
+class ResearchDepartmentOperator(BaseOperator):
+    name = "ResearchDepartmentOperator"
+    operator_type = "reactive"
+    engine = "product_pipeline"
+
+    SYSTEM_PROMPT = (
+        "You are the Research Department of an autonomous product pipeline. Given a "
+        "brand, niche, and topic, produce a structured research dossier as a JSON object "
+        "with exactly these keys: target_audience (string), core_problem (string), "
+        "market_flaws (array of strings), data_points (array of strings)."
+    )
+
+    def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        brand = state.get("brand", "")
+        niche = state.get("niche", "")
+        topic = state.get("topic", "")
+
+        if _external_calls_allowed(state):
+            dossier = call_llm(self.SYSTEM_PROMPT, f"Brand: {brand}\nNiche: {niche}\nTopic: {topic}")
+        else:
+            dossier = {
+                "stub": True,
+                "target_audience": f"Audience for {topic or 'this topic'} within {niche or 'this niche'}",
+                "core_problem": f"Unsolved core problem for {topic or 'this topic'}",
+                "market_flaws": [f"Existing {niche or 'market'} solutions lack depth on {topic or 'this topic'}"],
+                "data_points": [f"Placeholder data point for {topic or 'this topic'}"],
+            }
+
+        state["research_dossier"] = dossier
+        return state
+
+
+class ProductDesignOperator(BaseOperator):
+    name = "ProductDesignOperator"
+    operator_type = "reactive"
+    engine = "product_pipeline"
+
+    SYSTEM_PROMPT = (
+        "You are the Product Design Team. Given a research dossier, produce an "
+        "enterprise-grade product blueprint as a JSON object with exactly these keys: "
+        "specifications (array of strings), data_models (array of strings), "
+        "user_flows (array of strings)."
+    )
+
+    def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        dossier = state.get("research_dossier", {})
+
+        if _external_calls_allowed(state):
+            blueprint = call_llm(self.SYSTEM_PROMPT, json.dumps(dossier))
+        else:
+            problem = dossier.get("core_problem", "the core problem")
+            blueprint = {
+                "stub": True,
+                "specifications": [f"Solve: {problem}"],
+                "data_models": ["Entity: Product", "Entity: User"],
+                "user_flows": ["Discover -> Evaluate -> Purchase -> Use"],
+            }
+
+        state["product_blueprint"] = blueprint
+        return state
+
+
+class ProductCompletionOperator(BaseOperator):
+    name = "ProductCompletionOperator"
+    operator_type = "reactive"
+    engine = "product_pipeline"
+
+    SYSTEM_PROMPT = (
+        "You are the Product Completion Team. Given a product blueprint, produce the "
+        "finished product's components for every platform as a JSON object with "
+        "exactly these keys: web (string), mobile (string), api (string), "
+        "content (string) -- each the actual drafted material or component "
+        "description for that platform."
+    )
+
+    def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        blueprint = state.get("product_blueprint", {})
+
+        if _external_calls_allowed(state):
+            assets = call_llm(self.SYSTEM_PROMPT, json.dumps(blueprint))
+        else:
+            assets = {
+                "stub": True,
+                "web": "Placeholder web component draft",
+                "mobile": "Placeholder mobile component draft",
+                "api": "Placeholder API contract draft",
+                "content": "Placeholder content draft",
+            }
+
+        state["product_assets"] = assets
+        return state
+
+
+class PolishAuditOperator(BaseOperator):
+    name = "PolishAuditOperator"
+    operator_type = "conditional"
+    engine = "product_pipeline"
+
+    SYSTEM_PROMPT = (
+        "You are the Polish/Audit Team. Given the finished product payload and any "
+        "brand-doctrine violations already detected, audit for grammar, spelling, "
+        "legal/compliance gaps, accessibility, and real-world usability gaps. Return "
+        "a JSON object with exactly these keys: issues (array of strings), "
+        "corrected_payload (object -- the product payload with all flagged issues "
+        "fixed), compliance_notes (string)."
+    )
+
+    def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        assets = state.get("product_assets", {})
+
+        # Real, deterministic brand-doctrine check -- reused rather than
+        # re-implemented, and always runs regardless of tier.
+        state.setdefault("artifact_version", "1.0.0")
+        state["copy_text"] = json.dumps(assets)
+        state = BrandDoctrineComplianceOperator().execute(state)
+
+        if _external_calls_allowed(state):
+            audit = call_llm(
+                self.SYSTEM_PROMPT,
+                json.dumps({"product_assets": assets, "brand_violations": state["brand_violations"]}),
+            )
+        else:
+            audit = {
+                "stub": True,
+                "issues": [] if state["brand_compliant"] else ["Brand doctrine violations detected"],
+                "corrected_payload": assets,
+                "compliance_notes": "Stub audit -- no live LLM audit performed in this environment tier.",
+            }
+
+        audit["brand_compliant"] = state["brand_compliant"]
+        audit["brand_violations"] = state["brand_violations"]
+        state["audit_report"] = audit
+        return state
+
+
+class ShippingPackagerOperator(BaseOperator):
+    name = "ShippingPackagerOperator"
+    operator_type = "meta"
+    engine = "product_pipeline"
+
+    SYSTEM_PROMPT = (
+        "You are the Shipping Team. Given the audited, corrected product payload, "
+        "write a clear, numbered, step-by-step deployment/publish guide a solo "
+        "operator can follow by hand. Return a JSON object with exactly one key: "
+        "instructions (string)."
+    )
+
+    def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        brand = state.get("brand", "Brand")
+        topic = state.get("topic", "Topic")
+        audit_report = state.get("audit_report", {})
+        corrected_payload = audit_report.get("corrected_payload", state.get("product_assets", {}))
+
+        if _external_calls_allowed(state):
+            shipping = call_llm(self.SYSTEM_PROMPT, json.dumps(corrected_payload))
+            instructions = shipping.get("instructions", "")
+        else:
+            instructions = (
+                f"Stub instructions -- no live LLM call performed in this environment tier.\n"
+                f"1. Review the generated files for {brand} / {topic}.\n"
+                f"2. Re-run this engine with environment=\"production\" to generate real instructions."
+            )
+
+        files = {
+            f"{brand} - Research - {topic} - v1.txt": json.dumps(state.get("research_dossier", {}), indent=2),
+            f"{brand} - Blueprint - {topic} - v1.txt": json.dumps(state.get("product_blueprint", {}), indent=2),
+            f"{brand} - Product - {topic} - v1.txt": json.dumps(state.get("product_assets", {}), indent=2),
+            f"{brand} - AuditReport - {topic} - v1.txt": json.dumps(audit_report, indent=2),
+            f"{brand} - Shipping - {topic} - v1.txt": instructions,
+        }
+
+        output_dir = None
+        if _external_calls_allowed(state):
+            output_dir = PIPELINE_OUTPUT_DIR / f"{_slug(brand)}_{_slug(topic)}"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for filename, content in files.items():
+                (output_dir / filename).write_text(content, encoding="utf-8")
+
+        state["shipping_package"] = {"files": files, "instructions": instructions}
+        state["shipping_output_dir"] = str(output_dir) if output_dir else None
         return state

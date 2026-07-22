@@ -83,3 +83,8 @@ bindings:
   TestCoverageOperator: testing_validation
   EnvironmentProfileOperator: environment_context
   KnowledgeGraphOperator: knowledge_memory
+  ResearchDepartmentOperator: product_pipeline
+  ProductDesignOperator: product_pipeline
+  ProductCompletionOperator: product_pipeline
+  PolishAuditOperator: product_pipeline
+  ShippingPackagerOperator: product_pipeline

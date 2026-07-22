@@ -71,3 +71,5 @@ engines:
     module: engines/module_pack_engine.py
   - name: research_asset
     module: engines/research_asset_engine.py
+  - name: product_pipeline
+    module: engines/product_pipeline_engine.py
