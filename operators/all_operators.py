@@ -13,11 +13,19 @@ class InputInterpreter(BaseOperator):
     operator_type = "reactive"
     engine = "input"
 
+    FILLER_WORDS = {"um", "uh", "like", "basically", "actually", "you know"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Parse raw input into structured form
-        # expected: state["raw_input"] -> state["parsed_input"]
-        raw = state.get("raw_input", "")
-        state["parsed_input"] = {"text": raw}
+        # Parse raw input into a structured form the rest of the chain can use
+        raw = state.get("raw_input", "") or ""
+        tokens = raw.split()
+        state["parsed_input"] = {
+            "text": raw.strip(),
+            "tokens": tokens,
+            "word_count": len(tokens),
+            "is_question": raw.strip().endswith("?"),
+            "filler_word_count": sum(1 for t in tokens if t.lower().strip(",.!?") in self.FILLER_WORDS),
+        }
         return state
 
 
@@ -26,10 +34,27 @@ class ContextStabilizer(BaseOperator):
     operator_type = "reactive"
     engine = "context"
 
+    OVERLAP_THRESHOLD = 0.5
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Ensure context is coherent and non-drifting
-        context = state.get("context", {})
-        state["context"] = context  # placeholder for real logic
+        # Compare current context against the previous snapshot to detect drift
+        context = state.get("context", {}) or {}
+        previous = state.get("previous_context")
+
+        if previous:
+            shared = set(context.keys()) & set(previous.keys())
+            union = set(context.keys()) | set(previous.keys())
+            overlap_ratio = (len(shared) / len(union)) if union else 1.0
+            stable = overlap_ratio >= self.OVERLAP_THRESHOLD
+            # Preserve prior keys the new context dropped, when still stable
+            if stable:
+                context = {**previous, **context}
+        else:
+            overlap_ratio = 1.0
+            stable = True
+
+        state["context"] = context
+        state["context_stability"] = {"stable": stable, "overlap_ratio": round(overlap_ratio, 2)}
         return state
 
 
@@ -38,10 +63,20 @@ class ClarificationOperator(BaseOperator):
     operator_type = "reactive"
     engine = "input"
 
+    VAGUE_WORDS = {"this", "that", "it", "something", "stuff", "thing"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that clarification is needed if ambiguity detected
+        # Mark that clarification is needed, from an explicit flag or heuristics
         state.setdefault("flags", {})
-        state["flags"]["needs_clarification"] = state.get("ambiguity", False)
+        if "ambiguity" in state:
+            needs_clarification = bool(state["ambiguity"])
+        else:
+            parsed = state.get("parsed_input", {})
+            tokens = [t.lower().strip(",.!?") for t in parsed.get("tokens", [])]
+            too_short = 0 < parsed.get("word_count", 0) <= 2
+            vague = any(t in self.VAGUE_WORDS for t in tokens)
+            needs_clarification = too_short or vague
+        state["flags"]["needs_clarification"] = needs_clarification
         return state
 
 
@@ -51,10 +86,32 @@ class ConstraintEnforcer(BaseOperator):
     engine = "governance"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Enforce constraints stored in state["constraints"]
+        # Enforce constraints stored in state["constraints"] against the output
+        constraints = state.get("constraints", {}) or {}
+        text = self._output_text(state)
+        violations = []
+
+        max_length = constraints.get("max_length")
+        if max_length is not None and len(text) > max_length:
+            violations.append(f"output exceeds max_length ({len(text)} > {max_length})")
+
+        for word in constraints.get("forbidden_words", []):
+            if word and word.lower() in text.lower():
+                violations.append(f"forbidden word present: {word}")
+
+        state["constraint_violations"] = violations
         state.setdefault("flags", {})
-        state["flags"]["constraints_enforced"] = True
+        state["flags"]["constraints_enforced"] = len(violations) == 0
         return state
+
+    @staticmethod
+    def _output_text(state: Dict[str, Any]) -> str:
+        output = state.get("output")
+        if isinstance(output, str):
+            return output
+        if output is not None:
+            return json.dumps(output, default=str)
+        return state.get("parsed_input", {}).get("text", "") or state.get("raw_input", "") or ""
 
 
 class SafetyBoundaryOperator(BaseOperator):
@@ -62,10 +119,23 @@ class SafetyBoundaryOperator(BaseOperator):
     operator_type = "reactive"
     engine = "governance"
 
+    UNSAFE_PATTERNS = [
+        "ignore previous instructions",
+        "ignore all previous",
+        "disregard the system prompt",
+        "<script",
+        "drop table",
+    ]
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark unsafe patterns if detected
+        # Scan the raw/parsed text for known-unsafe patterns, in addition to any explicit flag
+        text = (state.get("parsed_input", {}).get("text") or state.get("raw_input", "") or "").lower()
+        detected = [p for p in self.UNSAFE_PATTERNS if p in text]
+        explicit_flag = bool(state.get("unsafe_pattern", False))
+
+        state["unsafe_patterns_detected"] = detected
         state.setdefault("flags", {})
-        state["flags"]["safety_ok"] = not state.get("unsafe_pattern", False)
+        state["flags"]["safety_ok"] = not (detected or explicit_flag)
         return state
 
 
@@ -74,10 +144,17 @@ class PrecisionRefiner(BaseOperator):
     operator_type = "reactive"
     engine = "input"
 
+    FILLER_PATTERN = re.compile(r"\b(um|uh|like|you know|basically|actually)\b[, ]*", re.IGNORECASE)
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Improve specificity of parsed input (placeholder)
-        parsed = state.get("parsed_input", {})
-        parsed["refined"] = True
+        # Strip filler words and collapse whitespace to sharpen parsed input
+        parsed = state.get("parsed_input", {}) or {}
+        original = parsed.get("text", "")
+        cleaned = self.FILLER_PATTERN.sub("", original)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+        parsed["refined_text"] = cleaned
+        parsed["refined"] = cleaned != original
         state["parsed_input"] = parsed
         return state
 
@@ -88,9 +165,18 @@ class StructuralFormatter(BaseOperator):
     engine = "execution"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Ensure output has a consistent structure
-        output = state.get("output", {})
-        state["output"] = {"structured": True, "data": output}
+        # Normalize output into a consistent envelope regardless of its original shape
+        output = state.get("output")
+        if isinstance(output, dict):
+            data_type = "object"
+        elif isinstance(output, list):
+            data_type = "array"
+        elif output is None:
+            data_type = "empty"
+        else:
+            data_type = "scalar"
+
+        state["output"] = {"structured": True, "type": data_type, "data": output}
         return state
 
 
@@ -99,10 +185,19 @@ class ExecutionRouter(BaseOperator):
     operator_type = "reactive"
     engine = "execution"
 
+    ACTION_HANDLERS = {
+        "generate": "generation_handler",
+        "fetch": "retrieval_handler",
+        "validate": "validation_handler",
+        "notify": "notification_handler",
+    }
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Decide which execution path or tool to use
+        # Decide which execution handler to use for the requested action
+        action = state.get("desired_action", "default")
         state.setdefault("routing", {})
-        state["routing"]["target"] = state.get("desired_action", "default")
+        state["routing"]["target"] = action
+        state["routing"]["handler"] = self.ACTION_HANDLERS.get(action, "default_handler")
         return state
 
 
@@ -112,9 +207,35 @@ class ErrorRecoveryOperator(BaseOperator):
     engine = "execution"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Handle errors and mark recovery status
+        # Classify any recorded error and decide a concrete recovery action
+        error = state.get("error")
+        retry_count = state.get("retry_count", 0)
+        max_retries = state.get("max_retries", 3)
+
         state.setdefault("flags", {})
-        state["flags"]["recovered"] = True
+        if not error:
+            state["flags"]["recovered"] = True
+            state["recovery_action"] = "none_needed"
+            return state
+
+        error_text = str(error).lower()
+        if "timeout" in error_text:
+            error_type = "timeout"
+        elif "valid" in error_text:
+            error_type = "validation"
+        else:
+            error_type = "unknown"
+
+        if retry_count < max_retries:
+            recovery_action = "retry"
+            recovered = True
+        else:
+            recovery_action = "abort"
+            recovered = False
+
+        state["error_type"] = error_type
+        state["recovery_action"] = recovery_action
+        state["flags"]["recovered"] = recovered
         return state
 
 
@@ -124,9 +245,17 @@ class MemoryAlignmentOperator(BaseOperator):
     engine = "memory"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Align current state with stored memory (placeholder)
+        # Align current context with stored memory, flagging real conflicts
+        memory = state.get("memory", {}) or {}
+        context = state.get("context", {}) or {}
+
+        conflicts = [k for k in memory if k in context and memory[k] != context[k]]
+        merged = {**memory, **context}
+
+        state["context"] = merged
+        state["memory_conflicts"] = conflicts
         state.setdefault("flags", {})
-        state["flags"]["memory_aligned"] = True
+        state["flags"]["memory_aligned"] = len(conflicts) == 0
         return state
 
 
@@ -137,9 +266,18 @@ class PredictivePlanner(BaseOperator):
     operator_type = "proactive"
     engine = "optimization"
 
+    GOAL_TEMPLATES = {
+        "launch": ["research", "design", "build", "test", "ship"],
+        "fix": ["reproduce", "diagnose", "patch", "verify"],
+        "research": ["gather_sources", "analyze", "summarize"],
+    }
+    DEFAULT_PLAN = ["research", "execute", "verify"]
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Generate a simple plan based on current state
-        state["plan"] = state.get("plan", {"steps": []})
+        # Build a concrete step plan for the stated goal
+        goal = state.get("goal", "")
+        steps = self.GOAL_TEMPLATES.get(goal, self.DEFAULT_PLAN)
+        state["plan"] = {"goal": goal or "unspecified", "steps": list(steps)}
         return state
 
 
@@ -148,10 +286,25 @@ class OpportunityScanner(BaseOperator):
     operator_type = "proactive"
     engine = "optimization"
 
+    RULES = [
+        ("conversion_rate", lambda v: v < 2.0, "conversion_rate below 2% - review the funnel"),
+        ("engagement_rate", lambda v: v > 80.0, "engagement_rate above 80% - double down on this channel"),
+        ("error_rate", lambda v: v > 5.0, "error_rate above 5% - investigate failures"),
+        ("churn_rate", lambda v: v > 10.0, "churn_rate above 10% - prioritize retention"),
+    ]
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Detect potential opportunities (placeholder)
+        # Scan metrics against known thresholds for actionable opportunities
+        metrics = state.get("metrics", {}) or {}
+        opportunities = [
+            message
+            for metric_key, predicate, message in self.RULES
+            if metric_key in metrics and predicate(metrics[metric_key])
+        ]
+
+        state["opportunities"] = opportunities
         state.setdefault("flags", {})
-        state["flags"]["opportunities_found"] = True
+        state["flags"]["opportunities_found"] = len(opportunities) > 0
         return state
 
 
@@ -161,9 +314,16 @@ class OptimizationOperator(BaseOperator):
     engine = "optimization"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that optimization pass has been applied
+        # Select the best-scoring candidate, if any were provided
+        candidates = state.get("candidates", []) or []
+        best = None
+        if candidates:
+            scored = [c if isinstance(c, dict) else {"value": c, "score": c} for c in candidates]
+            best = max(scored, key=lambda c: c.get("score", 0))
+
+        state["best_candidate"] = best
         state.setdefault("flags", {})
-        state["flags"]["optimized"] = True
+        state["flags"]["optimized"] = best is not None
         return state
 
 
@@ -173,9 +333,12 @@ class AuditCycleOperator(BaseOperator):
     engine = "governance"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Record that an audit cycle occurred
+        # Record a real audit entry: a timestamped snapshot of the current flags
         state.setdefault("audit_log", [])
-        state["audit_log"].append({"event": "audit_cycle"})
+        state["audit_log"].append({
+            "event": "audit_cycle",
+            "flags_snapshot": dict(state.get("flags", {})),
+        })
         return state
 
 
@@ -184,10 +347,24 @@ class DriftMonitor(BaseOperator):
     operator_type = "proactive"
     engine = "governance"
 
+    DRIFT_THRESHOLD_PCT = 20.0
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Detect behavioral drift (placeholder)
+        # Compare current metrics against a baseline to detect real deviation
+        baseline = state.get("baseline_metrics", {}) or {}
+        current = state.get("current_metrics", {}) or {}
+
+        deviations = {}
+        for key, baseline_value in baseline.items():
+            if key not in current or not baseline_value:
+                continue
+            pct_change = abs(current[key] - baseline_value) / abs(baseline_value) * 100
+            if pct_change >= self.DRIFT_THRESHOLD_PCT:
+                deviations[key] = round(pct_change, 1)
+
+        state["drift_deviations"] = deviations
         state.setdefault("flags", {})
-        state["flags"]["drift_detected"] = False
+        state["flags"]["drift_detected"] = len(deviations) > 0
         return state
 
 
@@ -197,9 +374,13 @@ class LoadBalancer(BaseOperator):
     engine = "optimization"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark load balancing decision
+        # Assign work to whichever worker currently has the lowest load
+        worker_loads = state.get("worker_loads", {}) or {}
+        assigned = min(worker_loads, key=worker_loads.get) if worker_loads else None
+
+        state["assigned_worker"] = assigned
         state.setdefault("flags", {})
-        state["flags"]["load_balanced"] = True
+        state["flags"]["load_balanced"] = assigned is not None
         return state
 
 
@@ -209,7 +390,15 @@ class RedundancyOperator(BaseOperator):
     engine = "optimization"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark redundancy handling
+        # Deduplicate items, tracking how much redundancy was actually removed
+        items = state.get("items", []) or []
+        seen = []
+        for item in items:
+            key = json.dumps(item, sort_keys=True, default=str) if isinstance(item, (dict, list)) else item
+            if key not in seen:
+                seen.append(key)
+
+        state["deduplicated_count"] = len(items) - len(seen)
         state.setdefault("flags", {})
         state["flags"]["redundancy_handled"] = True
         return state
@@ -221,9 +410,14 @@ class ConsistencyOperator(BaseOperator):
     engine = "governance"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Ensure outputs are consistent across passes
+        # Flag a structural mismatch between this output and the previous pass
+        output = state.get("output")
+        previous_output = state.get("previous_output")
+
+        consistent = previous_output is None or type(output) is type(previous_output)
+
         state.setdefault("flags", {})
-        state["flags"]["consistent"] = True
+        state["flags"]["consistent"] = consistent
         return state
 
 
@@ -233,9 +427,19 @@ class CompressionOperator(BaseOperator):
     engine = "optimization"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that compression was applied
+        # Actually truncate long text output down to a target length
+        output = state.get("output")
+        target_length = state.get("compression_target_length", 280)
+
+        if isinstance(output, str) and len(output) > target_length:
+            words = output[: target_length].rsplit(" ", 1)[0]
+            state["output"] = words + "..."
+            compressed = True
+        else:
+            compressed = False
+
         state.setdefault("flags", {})
-        state["flags"]["compressed"] = True
+        state["flags"]["compressed"] = compressed
         return state
 
 
@@ -244,10 +448,21 @@ class ExpansionOperator(BaseOperator):
     operator_type = "proactive"
     engine = "optimization"
 
+    EXPECTED_SECTIONS = ["summary", "details", "next_steps"]
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that expansion was applied
+        # Fill in any recommended sections missing from a structured output
+        output = state.get("output")
+        expanded = False
+        if isinstance(output, dict):
+            for section in self.EXPECTED_SECTIONS:
+                if section not in output:
+                    output[section] = None
+                    expanded = True
+            state["output"] = output
+
         state.setdefault("flags", {})
-        state["flags"]["expanded"] = True
+        state["flags"]["expanded"] = expanded
         return state
 
 
@@ -258,10 +473,22 @@ class DecisionTreeOperator(BaseOperator):
     operator_type = "conditional"
     engine = "reasoning"
 
+    # (priority, risk_level) -> branch
+    TREE = {
+        ("critical", "high"): "escalate_immediately",
+        ("critical", "low"): "fast_track",
+        ("normal", "high"): "review_required",
+        ("normal", "low"): "standard_path",
+    }
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Choose a branch based on state
+        # Choose a concrete branch from priority + risk_level, not priority alone
+        priority = state.get("priority", "normal")
+        risk_level = state.get("risk_level", "low")
+        branch = self.TREE.get((priority, risk_level), "standard_path")
+
         state.setdefault("routing", {})
-        state["routing"]["branch"] = state.get("priority", "default")
+        state["routing"]["branch"] = branch
         return state
 
 
@@ -270,9 +497,20 @@ class PriorityResolver(BaseOperator):
     operator_type = "conditional"
     engine = "reasoning"
 
+    PRECEDENCE = ["critical", "high", "normal", "low"]
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Resolve conflicting priorities (placeholder)
-        state["priority"] = state.get("priority", "normal")
+        # Resolve competing priority candidates by real precedence, not just pass-through
+        candidates = state.get("priority_candidates")
+        if candidates:
+            resolved = min(
+                candidates,
+                key=lambda p: self.PRECEDENCE.index(p) if p in self.PRECEDENCE else len(self.PRECEDENCE),
+            )
+        else:
+            resolved = state.get("priority", "normal")
+
+        state["priority"] = resolved
         return state
 
 
@@ -282,9 +520,17 @@ class ResourceAllocator(BaseOperator):
     engine = "execution"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Assign resources (placeholder)
-        state.setdefault("resources", {})
-        state["resources"]["allocated"] = True
+        # Check requested resources against what's actually available
+        requested = state.get("requested_resources", {}) or {}
+        available = state.get("available_resources", {}) or {}
+
+        shortfall = {
+            key: amount - available.get(key, 0)
+            for key, amount in requested.items()
+            if amount > available.get(key, 0)
+        }
+
+        state["resources"] = {"allocated": len(shortfall) == 0, "shortfall": shortfall}
         return state
 
 
@@ -293,9 +539,19 @@ class ModeSwitchOperator(BaseOperator):
     operator_type = "conditional"
     engine = "context"
 
+    ALLOWED_MODES = {"default", "focus", "exploration", "safe_mode"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Switch mode based on state
-        state["mode"] = state.get("desired_mode", "default")
+        # Only switch mode if the requested mode is actually valid
+        desired_mode = state.get("desired_mode", "default")
+        current_mode = state.get("mode", "default")
+
+        if desired_mode in self.ALLOWED_MODES:
+            state["mode"] = desired_mode
+            state["invalid_mode_requested"] = False
+        else:
+            state["mode"] = current_mode
+            state["invalid_mode_requested"] = desired_mode != "default"
         return state
 
 
@@ -305,8 +561,14 @@ class ContextRebuilder(BaseOperator):
     engine = "context"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Rebuild context from minimal info (placeholder)
-        state["context"] = state.get("context", {})
+        # Merge partial context fragments into a single rebuilt context
+        fragments = state.get("context_fragments", []) or []
+        rebuilt: Dict[str, Any] = dict(state.get("context", {}) or {})
+        for fragment in fragments:
+            if isinstance(fragment, dict):
+                rebuilt.update(fragment)
+
+        state["context"] = rebuilt
         return state
 
 
@@ -316,9 +578,15 @@ class MultiEngineCoordinator(BaseOperator):
     engine = "integration"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that multiple engines are involved
+        # Determine whether all engines this task needs are actually available
+        required = state.get("required_engines", []) or []
+        available = set(state.get("available_engines", []) or [])
+        missing = [e for e in required if e not in available]
+
+        state["missing_engines"] = missing
         state.setdefault("flags", {})
-        state["flags"]["multi_engine"] = True
+        state["flags"]["multi_engine"] = len(required) > 1
+        state["flags"]["all_engines_available"] = len(missing) == 0
         return state
 
 
@@ -328,9 +596,14 @@ class DependencyChecker(BaseOperator):
     engine = "execution"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark dependencies as satisfied (placeholder)
+        # Check that every declared dependency has actually completed
+        dependencies = state.get("dependencies", []) or []
+        completed = set(state.get("completed_ids", []) or [])
+        unmet = [d for d in dependencies if d not in completed]
+
+        state["unmet_dependencies"] = unmet
         state.setdefault("flags", {})
-        state["flags"]["dependencies_ok"] = True
+        state["flags"]["dependencies_ok"] = len(unmet) == 0
         return state
 
 
@@ -340,9 +613,19 @@ class ValidationOperator(BaseOperator):
     engine = "execution"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark validation status
+        # Validate output against a simple required-fields schema, when one is given
+        schema = state.get("validation_schema")
+        output = state.get("output")
+
+        if schema and isinstance(output, dict):
+            required_fields = schema.get("required_fields", [])
+            missing = [f for f in required_fields if f not in output]
+        else:
+            missing = []
+
+        state["validation_errors"] = missing
         state.setdefault("flags", {})
-        state["flags"]["validated"] = True
+        state["flags"]["validated"] = len(missing) == 0
         return state
 
 
@@ -351,10 +634,25 @@ class BoundaryExpander(BaseOperator):
     operator_type = "conditional"
     engine = "reasoning"
 
+    RELATED_TOPICS = {
+        "pricing": ["discounts", "packaging", "competitors"],
+        "marketing": ["seo", "content", "advertising"],
+        "security": ["compliance", "authentication", "encryption"],
+    }
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that scope was expanded
+        # Widen scope by adding topics related to what's already in it
+        scope = list(state.get("scope", []) or [])
+        added = []
+        for topic in list(scope):
+            for related in self.RELATED_TOPICS.get(topic, []):
+                if related not in scope:
+                    scope.append(related)
+                    added.append(related)
+
+        state["scope"] = scope
         state.setdefault("flags", {})
-        state["flags"]["scope_expanded"] = True
+        state["flags"]["scope_expanded"] = len(added) > 0
         return state
 
 
@@ -364,9 +662,18 @@ class BoundaryCompressor(BaseOperator):
     engine = "reasoning"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that scope was narrowed
+        # Narrow scope down to only the items matching the stated focus keywords
+        scope = state.get("scope", []) or []
+        focus_keywords = state.get("focus_keywords")
+
+        if focus_keywords:
+            narrowed = [s for s in scope if s in focus_keywords]
+        else:
+            narrowed = scope
+
         state.setdefault("flags", {})
-        state["flags"]["scope_compressed"] = True
+        state["flags"]["scope_compressed"] = len(narrowed) < len(scope)
+        state["scope"] = narrowed
         return state
 
 
@@ -377,10 +684,22 @@ class MetaReasoningOperator(BaseOperator):
     operator_type = "meta"
     engine = "reasoning"
 
+    CONFIDENCE_ESCALATION_THRESHOLD = 40
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark that meta-reasoning was applied
+        # Reflect on the chosen reasoning strategy and escalate it if confidence is low
+        confidence = state.get("confidence", 100)
+        strategy = state.get("reasoning_strategy", "system1")
+
+        if confidence < self.CONFIDENCE_ESCALATION_THRESHOLD and strategy != "system2":
+            state["reasoning_strategy"] = "system2"
+            escalated = True
+        else:
+            escalated = False
+
         state.setdefault("flags", {})
         state["flags"]["meta_reasoned"] = True
+        state["flags"]["strategy_escalated"] = escalated
         return state
 
 
@@ -390,8 +709,13 @@ class CouncilSynthesizer(BaseOperator):
     engine = "integration"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Combine multiple candidate outputs (placeholder)
-        state["output"] = state.get("output", {})
+        # Synthesize the highest-scored candidate output, if candidates were offered
+        candidates = state.get("candidate_outputs", []) or []
+        if candidates:
+            best = max(candidates, key=lambda c: c.get("score", 0) if isinstance(c, dict) else 0)
+            state["output"] = best.get("output") if isinstance(best, dict) else best
+        else:
+            state["output"] = state.get("output", {})
         return state
 
 
@@ -400,10 +724,18 @@ class OverrideArbiter(BaseOperator):
     operator_type = "meta"
     engine = "governance"
 
+    ALLOWED_OVERRIDE_ROLES = {"admin", "owner", "governance_lead"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Decide whether an override is allowed
+        # An override needs both a request and a role actually permitted to make one
+        requested = bool(state.get("override_request", False))
+        role = state.get("requester_role")
+        allowed = requested and role in self.ALLOWED_OVERRIDE_ROLES
+
         state.setdefault("flags", {})
-        state["flags"]["override_allowed"] = state.get("override_request", False)
+        state["flags"]["override_allowed"] = allowed
+        if requested and not allowed:
+            state["override_denied_reason"] = "requester_role not permitted to override"
         return state
 
 
@@ -412,10 +744,16 @@ class EscalationOperator(BaseOperator):
     operator_type = "meta"
     engine = "governance"
 
+    SEVERITY_ESCALATION_THRESHOLD = 8
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark escalation path (placeholder)
+        # Escalate on explicit high_risk OR a severity score past the threshold
+        high_risk = bool(state.get("high_risk", False))
+        severity = state.get("severity", 0)
+        escalate = high_risk or severity >= self.SEVERITY_ESCALATION_THRESHOLD
+
         state.setdefault("flags", {})
-        state["flags"]["escalated"] = state.get("high_risk", False)
+        state["flags"]["escalated"] = escalate
         return state
 
 
@@ -425,8 +763,25 @@ class HarmonizationOperator(BaseOperator):
     engine = "integration"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Harmonize conflicting outputs (placeholder)
-        state["output"] = state.get("output", {})
+        # Merge non-conflicting keys across candidate outputs; flag true conflicts
+        conflicting = state.get("conflicting_outputs", []) or []
+        merged: Dict[str, Any] = {}
+        conflicts = []
+
+        for candidate in conflicting:
+            if not isinstance(candidate, dict):
+                continue
+            for key, value in candidate.items():
+                if key in merged and merged[key] != value:
+                    conflicts.append(key)
+                else:
+                    merged[key] = value
+
+        if merged or conflicts:
+            state["output"] = merged
+        else:
+            state["output"] = state.get("output", {})
+        state["harmonization_conflicts"] = conflicts
         return state
 
 
@@ -436,8 +791,23 @@ class VersioningOperator(BaseOperator):
     engine = "governance"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Attach version info
-        state["version"] = state.get("version", "v1")
+        # Compute a real next semantic version from the change type
+        previous_version = state.get("previous_version") or state.get("version", "v1.0.0")
+        change_type = state.get("change_type", "patch")
+
+        match = re.match(r"v?(\d+)\.(\d+)\.(\d+)", previous_version)
+        if match:
+            major, minor, patch = (int(part) for part in match.groups())
+            if change_type == "major":
+                major, minor, patch = major + 1, 0, 0
+            elif change_type == "minor":
+                minor, patch = minor + 1, 0
+            else:
+                patch += 1
+            state["version"] = f"v{major}.{minor}.{patch}"
+        else:
+            state["version"] = previous_version
+
         return state
 
 
@@ -446,9 +816,27 @@ class LifecycleOperator(BaseOperator):
     operator_type = "meta"
     engine = "governance"
 
+    # (current_stage, event) -> next_stage
+    TRANSITIONS = {
+        ("draft", "submit"): "review",
+        ("review", "approve"): "approved",
+        ("review", "reject"): "draft",
+        ("approved", "deploy"): "active",
+        ("active", "retire"): "retired",
+    }
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark lifecycle stage
-        state["lifecycle_stage"] = state.get("lifecycle_stage", "active")
+        # Advance lifecycle stage only along a valid, defined transition
+        current_stage = state.get("lifecycle_stage", "draft")
+        event = state.get("lifecycle_event")
+
+        next_stage = self.TRANSITIONS.get((current_stage, event))
+        if next_stage:
+            state["lifecycle_stage"] = next_stage
+            state["lifecycle_transition_valid"] = True
+        else:
+            state["lifecycle_stage"] = current_stage
+            state["lifecycle_transition_valid"] = event is None
         return state
 
 
@@ -457,10 +845,16 @@ class GovernanceOperator(BaseOperator):
     operator_type = "meta"
     engine = "governance"
 
+    RESTRICTED_ACTIONS = {"delete_data", "modify_permissions", "external_publish"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Apply governance rules (placeholder)
+        # An action only needs governance sign-off if it's restricted and unapproved
+        action = state.get("action")
+        approved = bool(state.get("approved", False))
+        blocked = action in self.RESTRICTED_ACTIONS and not approved
+
         state.setdefault("flags", {})
-        state["flags"]["governed"] = True
+        state["flags"]["governed"] = not blocked
         return state
 
 
@@ -469,10 +863,16 @@ class IntegrationOperator(BaseOperator):
     operator_type = "meta"
     engine = "integration"
 
+    SUPPORTED_INTEGRATIONS = {"slack", "email", "webhook", "database"}
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Mark integration step
+        # Only mark integrated if the requested target is actually supported
+        target = state.get("integration_target")
+        supported = target in self.SUPPORTED_INTEGRATIONS
+
+        state["integration_supported"] = supported
         state.setdefault("flags", {})
-        state["flags"]["integrated"] = True
+        state["flags"]["integrated"] = target is None or supported
         return state
 
 
@@ -482,7 +882,14 @@ class IntegrationOrchestrator(BaseOperator):
     engine = "integration"
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        # Final synthesis point
+        # Final synthesis: roll up what actually happened during this run
+        flags = state.get("flags", {}) or {}
+        state["final_summary"] = {
+            "output": state.get("output"),
+            "flags_set": sorted(k for k, v in flags.items() if v),
+            "flags_unset": sorted(k for k, v in flags.items() if not v),
+            "has_errors": bool(state.get("error") or state.get("escalation_error")),
+        }
         state.setdefault("flags", {})
         state["flags"]["final_synthesized"] = True
         return state
