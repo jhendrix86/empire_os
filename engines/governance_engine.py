@@ -5,6 +5,7 @@ Bridges empire_os workflow engine to the real governance-engine service
 for policy evaluation and enforcement decisions.
 """
 
+import asyncio
 import httpx
 import os
 from typing import Any, Dict, Optional
@@ -27,9 +28,15 @@ class GovernanceEngine(BaseEngine):
 
     def __init__(self):
         super().__init__()
+        # Was defaulting to :8043 (monitoring-engine's real port) instead of
+        # governance-engine's actual :8033 - confirmed against
+        # governance-engine/app/utils/config.py's real `port: int = 8033`
+        # default (2026-08-10 OS42_REPAIR_PLAN.md reconciliation). This bug
+        # meant the "governance bridge" was silently calling the wrong
+        # service, or nothing, depending on what else was running.
         self.governance_engine_url = os.getenv(
             "GOVERNANCE_ENGINE_URL",
-            "http://localhost:8043"
+            "http://localhost:8033"
         )
         self.timeout = 30.0  # seconds
         self.client: Optional[httpx.AsyncClient] = None
@@ -45,7 +52,25 @@ class GovernanceEngine(BaseEngine):
             await self.client.aclose()
         logger.info("governance_engine_shutdown")
 
-    async def run_operator(
+    def run_operator(
+        self,
+        operator: BaseOperator,
+        state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Sync entry point required by BaseEngine (every other engine in this
+        fleet implements run_operator synchronously - GovernanceEngine was
+        the sole exception, introduced by the Stage 3.2 governance bridge,
+        which broke both this engine's tests and any other synchronous
+        caller silently returning a coroutine instead of a result. Found
+        during the 2026-08-10 port-bug fix, confirmed pre-existing (fails
+        identically on the commit before that fix) via `git stash`. api.py's
+        POST /engines/{name}/run calls this from a sync FastAPI endpoint
+        (threadpool, no running event loop), so asyncio.run() here is safe.
+        """
+        return asyncio.run(self._run_operator_async(operator, state))
+
+    async def _run_operator_async(
         self,
         operator: BaseOperator,
         state: Dict[str, Any]
@@ -175,6 +200,20 @@ class GovernanceEngine(BaseEngine):
             operator_type: Type of operator
             result: Execution result
             context: Execution context
+
+        KNOWN GAP (2026-08-10 reconciliation, not fixed here): POST
+        /governance/log-action does not exist anywhere in governance-engine
+        (confirmed against its real controllers - only /governance/check,
+        /history/{id}, /rules, /override, /emergency-stop, /rollback, plus
+        /dlq/* exist). This call has always 404'd, silently swallowed by the
+        except below - operator-execution-result logging has never actually
+        worked. Distinct from /governance/check's own decision history
+        (GET /governance/history/{entity_id}), which records *policy
+        decisions*, not *operator execution outcomes* - so that existing
+        endpoint isn't a drop-in fix. Needs a real design decision (add a
+        matching endpoint to governance-engine, or decide this audit trail
+        isn't needed) before "fixing" it - left as a flagged gap, not
+        guessed at, matching this reconciliation's own rule.
         """
         if not self.client:
             return
