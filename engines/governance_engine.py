@@ -154,17 +154,52 @@ class GovernanceEngine(BaseEngine):
             return {"allowed": True}
 
         try:
+            # Real bug fixed 2026-08-11 (found by actually running both
+            # sides, not by reading code): this used to POST
+            # {"operator_name", "operator_type", "context"}, but
+            # governance-engine's real GovernanceCheckRequest schema
+            # requires request_type/request_data/requester - none of which
+            # were sent - so every real call 422'd before ever reaching rule
+            # evaluation. "operator.execute_request" is a real RequestType
+            # value added to governance-engine for exactly this bridge (see
+            # its request_schemas.py) - there was no existing funnel/
+            # product/resource value that wouldn't misrepresent what a
+            # generic empire_os operator run actually is.
             response = await self.client.post(
                 f"{self.governance_engine_url}/governance/check",
                 json={
-                    "operator_name": operator_name,
-                    "operator_type": operator_type,
-                    "context": context
+                    "request_type": "operator.execute_request",
+                    "request_data": {
+                        "operator_name": operator_name,
+                        "operator_type": operator_type,
+                    },
+                    "requester": "empire_os",
+                    "context": context,
                 }
             )
 
             if response.status_code == 200:
-                return response.json()
+                # Real bug fixed alongside the request shape: the response
+                # is GovernanceCheckResponse - {"success": bool, "decision":
+                # {..., "approved": bool, "rationale": str, ...}, "error":
+                # ...} - there is no top-level "allowed"/"reason". Reading
+                # response.json() directly (the old code) always returned
+                # False from .get("allowed", False) even on success=True,
+                # meaning every operator would have stayed governance-
+                # blocked even after the request-shape fix alone.
+                body = response.json()
+                decision = body.get("decision")
+                if not body.get("success") or decision is None:
+                    logger.warning(
+                        "governance_check_unsuccessful",
+                        error=body.get("error"),
+                    )
+                    return {"allowed": False, "reason": body.get("error") or "Governance check did not return a decision"}
+                return {
+                    "allowed": decision.get("approved", False),
+                    "reason": decision.get("rationale"),
+                    "decision": decision,
+                }
             else:
                 logger.warning(
                     "governance_check_failed",
