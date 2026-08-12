@@ -236,19 +236,17 @@ class GovernanceEngine(BaseEngine):
             result: Execution result
             context: Execution context
 
-        KNOWN GAP (2026-08-10 reconciliation, not fixed here): POST
-        /governance/log-action does not exist anywhere in governance-engine
-        (confirmed against its real controllers - only /governance/check,
-        /history/{id}, /rules, /override, /emergency-stop, /rollback, plus
-        /dlq/* exist). This call has always 404'd, silently swallowed by the
-        except below - operator-execution-result logging has never actually
-        worked. Distinct from /governance/check's own decision history
-        (GET /governance/history/{entity_id}), which records *policy
-        decisions*, not *operator execution outcomes* - so that existing
-        endpoint isn't a drop-in fix. Needs a real design decision (add a
-        matching endpoint to governance-engine, or decide this audit trail
-        isn't needed) before "fixing" it - left as a flagged gap, not
-        guessed at, matching this reconciliation's own rule.
+        Real since 2026-08-11: governance-engine now has a matching
+        POST /governance/log-action endpoint (app/controllers/
+        governance_controller.py -> GovernanceService.log_action(),
+        distinct from GET /governance/history/{entity_id}'s *policy
+        decisions* - this records *operator execution outcomes*). Until
+        then, this call had 404'd unconditionally since the Stage 3.2
+        governance bridge was built - always swallowed by the except
+        below, so this audit trail had never actually recorded anything.
+        The try/except stays even though the endpoint is real now: this is
+        still best-effort audit logging, not something that should ever
+        block an already-completed operator execution.
         """
         if not self.client:
             return

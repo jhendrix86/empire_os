@@ -140,6 +140,49 @@ async def test_check_governance_fails_open_when_decision_missing():
     assert result["reason"] == "boom"
 
 
+@pytest.mark.asyncio
+async def test_log_governance_action_posts_the_real_payload_shape():
+    """
+    governance-engine's POST /governance/log-action is real as of
+    2026-08-11 (governance-engine commit adding GovernanceService.
+    log_action()) - this call used to 404 unconditionally, silently
+    swallowed by the broad except in _log_governance_action. Proves the
+    real payload shape (operator_name/operator_type/result_success/
+    context, no requester field) against a mock that mirrors the real
+    endpoint's actual response shape ({"success": true, "entry": {...}}).
+    """
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "success": True,
+            "entry": {
+                "operator_name": captured["json"]["operator_name"],
+                "operator_type": captured["json"]["operator_type"],
+                "result_success": captured["json"]["result_success"],
+                "context": captured["json"]["context"],
+                "logged_by": "unknown",
+                "logged_at": "2026-08-11T00:00:00",
+            },
+        })
+
+    engine = _engine_with_mock_transport(handler)
+    # Should not raise - _log_governance_action returns None either way.
+    await engine._log_governance_action(
+        operator_name="RealOperator", operator_type="content",
+        result={"success": True}, context={"tenant_id": "t1"},
+    )
+
+    assert captured["json"] == {
+        "operator_name": "RealOperator",
+        "operator_type": "content",
+        "result_success": True,
+        "context": {"tenant_id": "t1"},
+    }
+
+
 def test_run_operator_executes_when_governance_approves():
     """
     End-to-end through run_operator() -> _run_operator_async() -> the real
