@@ -3,6 +3,7 @@ uvicorn==0.24.0
 pydantic==2.5.0
 pyyaml==6.0.1
 pytest==7.4.3
+structlog==24.1.0
 
 # Only required when running the product_pipeline engine in staging/production
 # (environment_profile.external_calls_allowed=True) -- not needed for local/test tier.
