@@ -85,3 +85,22 @@ import bare `orchestrator.*` / `operators.*` — run it as
 ## License
 
 Proprietary — All Rights Reserved. See [LICENSE](LICENSE).
+
+## Business Context
+
+This repo is engineering-only — code, tests, and architecture. Business,
+brand, and venture context (product catalog, pricing, offers, brand voice,
+sales funnels, platform/channel strategy, ops calendar) lives in the
+**Empire OS** Notion workspace, not here:
+
+- [Command Center](https://app.notion.com/p/3a703d47c57e81d4aaf3d1136bc94b55) — master index
+- [System Glossary & Structure](https://app.notion.com/p/3a703d47c57e816ea082cbc790ffce1e) — canonical naming (Empire OS / StructuredMenace / TALORA / Verolyn)
+- [TALORA — Build Status & Capability Log](https://app.notion.com/p/3cf03d47c57e8192b87ef6f2003323c6) — the business side's view of what's built
+
+**Known gap (2026-09-14, not yet reconciled):** the Notion build-status log
+above currently only knows about `baselayer` as a confirmed real repo. It has
+no record of this repo (89 operators, 36 engines, 243 tests) or of the ~20
+other `*-engine` repos in this account. Until that reconciliation happens,
+treat this README, `EMPIRE_OS_INTEGRATION_ANALYSIS.md`, and
+`../AEON_GAP_REGISTER.md` as the current source of truth for engineering
+state — not the Notion log.
